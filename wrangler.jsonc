@@ -25,7 +25,7 @@
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
-	"vars": { "BOT_TOKEN": "7741738275:AAEWJXOaLBsg-kC_ryO1Eak7bKe9oiwJcWw" },
+	"vars": { "BOT_TOKEN": "7741738275:AAFJOT0EMPRmKcecYAzQykouXAlyJUjf3kA" },
 	/**
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
