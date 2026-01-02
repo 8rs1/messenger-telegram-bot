@@ -7,7 +7,10 @@ let answerState = {
 export default {
 	async fetch(request, env, ctx) {
 		const update = await request.json();
-		if (request.method === 'POST' && update.message && answerState.flag) {
+		if (request.method === 'POST' && update.message.text.toLowerCase() === '/start') {
+			const text = `سلام ${update.message.from.first_name}، به ربات پیامرسان خوش آمدید. \nبا استفاده از این ربات میتوانید مستقیما با ادمین ربات در ارتباط باشید.`;
+			await sendMessage(env.BOT_TOKEN, update.message.chat.id, text);
+		} else if (request.method === 'POST' && update.message && answerState.flag) {
 			await sendMessage(env.BOT_TOKEN, answerState.user.id, update.message.text, {
 				reply_parameters: {
 					message_id: answerState.user.msgId,
