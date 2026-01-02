@@ -6,32 +6,39 @@ let answerState = {
 };
 export default {
 	async fetch(request, env, ctx) {
-		const update = await request.json();
-		if (request.method === 'POST' && update.message.text.toLowerCase() === '/start') {
-			const text = `سلام ${update.message.from.first_name}، به ربات پیامرسان خوش آمدید. \nبا استفاده از این ربات میتوانید مستقیما با ادمین ربات در ارتباط باشید.`;
-			await sendMessage(env.BOT_TOKEN, update.message.chat.id, text);
-		} else if (request.method === 'POST' && update.message && answerState.flag) {
-			await sendMessage(env.BOT_TOKEN, answerState.user.id, update.message.text, {
-				reply_parameters: {
-					message_id: answerState.user.msgId,
-				},
-			});
-			answerState = {
-				flag: false,
-				user: { id: null, msgId: null },
-			};
-		} else if (request.method === 'POST' && update.message) {
-			await sendMessageToAdmin(env.BOT_TOKEN, update.message.chat.id, update.message.message_id);
-			return new Response('Hello World!');
-		} else if (request.method === 'POST' && update.callback_query) {
-			const { data } = update.callback_query;
-			switch (true) {
-				case data.startsWith('admin_reply.'):
+		if (request.method !== 'POST') {
+			return new Response('Method not allowed', { status: 405 });
+		}
+		try {
+			const update = await request.json();
+			if (update.message.text.toLowerCase() === '/start') {
+				const text = `سلام ${update.message.from.first_name}، به ربات پیامرسان خوش آمدید. \nبا استفاده از این ربات میتوانید مستقیما با ادمین ربات در ارتباط باشید.`;
+				await sendMessage(env.BOT_TOKEN, update.message.chat.id, text);
+			} else if (update.message && answerState.flag) {
+				await sendMessage(env.BOT_TOKEN, answerState.user.id, update.message.text, {
+					reply_parameters: {
+						message_id: answerState.user.msgId,
+					},
+				});
+				answerState = {
+					flag: false,
+					user: { id: null, msgId: null },
+				};
+			} else if (update.message.chat.id != ADMIN_ID) {
+				await sendMessageToAdmin(env.BOT_TOKEN, update.message.chat.id, update.message.message_id);
+				return new Response('Hello World!');
+			} else if (update.callback_query) {
+				const { data, id: callbackQueryId } = update.callback_query;
+				if (data.startsWith('admin_reply.')) {
 					const userData = data.split('.')[1];
 					const [userChatId, userMsgId] = userData.split('-');
 					answerState.flag = true;
 					answerState.user.id = userChatId;
 					answerState.user.msgId = userMsgId;
+					// answer to callback query
+					await sendRequest(env.BOT_TOKEN, 'answerCallbackQuery', {
+						callback_query_id: callbackQueryId,
+					});
 					await sendMessage(env.BOT_TOKEN, update.callback_query.from.id, 'Type answer', {
 						reply_markup: {
 							force_reply: true,
@@ -39,11 +46,15 @@ export default {
 							selective: true,
 						},
 					});
-
-					break;
+				}
 			}
+			return new Response('logic test');
+		} catch (err) {
+			console.error('Error:', err);
+			// send error to admin
+			await sendMessage(env.BOT_TOKEN, ADMIN_ID, `Error: ${err.message}`);
+			return new Response('Internal Server Error', { status: 500 });
 		}
-		return new Response('logic test');
 	},
 };
 async function sendRequest(token, method, data) {
@@ -86,9 +97,6 @@ async function sendMessageToAdmin(token, chatId, msgId) {
 	try {
 		const replyOpts = {
 			inline_keyboard: [[{ text: 'answer', callback_data: `admin_reply.${chatId}-${msgId}` }]],
-			force_reply: true,
-			input_field_placeholder: 'Type your answer...',
-			selective: true,
 		};
 		const res = await forwardMessage(token, chatId, ADMIN_ID, msgId);
 		const sendRes = await sendMessage(token, ADMIN_ID, 'Choose one of bottom keys', {
