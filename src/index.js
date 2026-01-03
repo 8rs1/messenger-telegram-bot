@@ -11,10 +11,12 @@ export default {
 		}
 		try {
 			const update = await request.json();
-			if (update.message.text.toLowerCase() === '/start') {
+			// User command: /start
+			if (update.message.text.toLowerCase() === '/start' && update.message.chat.id != ADMIN_ID) {
 				const text = `سلام ${update.message.from.first_name}، به ربات پیامرسان خوش آمدید. \nبا استفاده از این ربات میتوانید مستقیما با ادمین ربات در ارتباط باشید.`;
 				await sendMessage(env.BOT_TOKEN, update.message.chat.id, text);
-			} else if (update.message && answerState.flag) {
+				// Admin command: answer message to user message
+			} else if (update.message.chat.id == ADMIN_ID && answerState.flag) {
 				await sendMessage(env.BOT_TOKEN, answerState.user.id, update.message.text, {
 					reply_parameters: {
 						message_id: answerState.user.msgId,
@@ -24,9 +26,11 @@ export default {
 					flag: false,
 					user: { id: null, msgId: null },
 				};
+				// User command: send message to admin
 			} else if (update.message.chat.id != ADMIN_ID) {
 				await sendMessageToAdmin(env.BOT_TOKEN, update.message.chat.id, update.message.message_id);
 				return new Response('Hello World!');
+				// Admin command: enable answer state
 			} else if (update.callback_query) {
 				const { data, id: callbackQueryId } = update.callback_query;
 				if (data.startsWith('admin_reply.')) {
