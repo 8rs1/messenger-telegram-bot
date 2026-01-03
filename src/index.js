@@ -46,6 +46,18 @@ export default {
 					}
 					// Admin command: answer message to user message
 					if (answerState.flag && message.chat.id.toString() === ADMIN_ID.toString()) {
+						if (message.text === '/cancel') {
+							answerState = {
+								flag: false,
+								user: { id: null, msgId: null },
+							};
+							await sendMessage(env.BOT_TOKEN, ADMIN_ID, 'Operation cancelled.', {
+								reply_parameters: {
+									message_id: message.message_id,
+								},
+							});
+							return new Response('Replying cancelled(answer state reset).');
+						}
 						await sendMessage(env.BOT_TOKEN, answerState.user.id, message.text, {
 							reply_parameters: {
 								message_id: answerState.user.msgId,
@@ -65,7 +77,7 @@ export default {
 					}
 					// User command: send message to admin
 					if (message.from.id.toString() !== ADMIN_ID.toString()) {
-						await sendMessageToAdmin(env.BOT_TOKEN, update.message.chat.id, update.message.message_id);
+						await sendMessageToAdmin(env.BOT_TOKEN, message.chat.id, message.message_id);
 						await sendMessage(env.BOT_TOKEN, message.from.id, 'Message sent✅', {
 							reply_parameters: {
 								message_id: message.message_id,
@@ -73,6 +85,8 @@ export default {
 						});
 						return new Response('OK');
 					}
+					await sendMessage(env.BOT_TOKEN, message.chat.id, 'Invalid message!\nPlease use commands.');
+					return new Response('Logic response');
 				}
 			}
 		} catch (err) {
