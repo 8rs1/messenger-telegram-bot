@@ -46,7 +46,6 @@ export default {
 					}
 					// Admin command: answer message to user message
 					if (answerState.flag && message.chat.id.toString() === ADMIN_ID.toString()) {
-						await sendMessage(env.BOT_TOKEN, ADMIN_ID, JSON.stringify(message, null, 2));
 						await sendMessage(env.BOT_TOKEN, answerState.user.id, message.text, {
 							reply_parameters: {
 								message_id: answerState.user.msgId,
