@@ -55,13 +55,23 @@ export default {
 							flag: false,
 							user: { id: null, msgId: null },
 						};
+						await sendMessage(env.BOT_TOKEN, ADMIN_ID, 'Your message sent to user', {
+							reply_parameters: {
+								message_id: message.message_id,
+							},
+						});
 
 						return new Response('OK');
 					}
 					// User command: send message to admin
 					if (message.from.id.toString() !== ADMIN_ID.toString()) {
 						await sendMessageToAdmin(env.BOT_TOKEN, update.message.chat.id, update.message.message_id);
-						return new Response('Hello World!');
+						await sendMessage(env.BOT_TOKEN, message.from.id, 'Message sent✅', {
+							reply_parameters: {
+								message_id: message.message_id,
+							},
+						});
+						return new Response('OK');
 					}
 				}
 			}
