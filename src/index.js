@@ -11,48 +11,61 @@ export default {
 		}
 		try {
 			const update = await request.json();
-			// User command: /start
-			if (update.message.text.toLowerCase() === '/start' && update.message.chat.id != ADMIN_ID) {
-				const text = `سلام ${update.message.from.first_name}، به ربات پیامرسان خوش آمدید. \nبا استفاده از این ربات میتوانید مستقیما با ادمین ربات در ارتباط باشید.`;
-				await sendMessage(env.BOT_TOKEN, update.message.chat.id, text);
-				// Admin command: answer message to user message
-			} else if (update.message.chat.id == ADMIN_ID && answerState.flag) {
-				await sendMessage(env.BOT_TOKEN, answerState.user.id, update.message.text, {
-					reply_parameters: {
-						message_id: answerState.user.msgId,
-					},
-				});
-				answerState = {
-					flag: false,
-					user: { id: null, msgId: null },
-				};
-				// User command: send message to admin
-			} else if (update.message.chat.id != ADMIN_ID) {
-				await sendMessageToAdmin(env.BOT_TOKEN, update.message.chat.id, update.message.message_id);
-				return new Response('Hello World!');
-				// Admin command: enable answer state
-			} else if (update.callback_query) {
+			if (update.callback_query) {
 				const { data, id: callbackQueryId } = update.callback_query;
-				if (data.startsWith('admin_reply.')) {
-					const userData = data.split('.')[1];
-					const [userChatId, userMsgId] = userData.split('-');
-					answerState.flag = true;
-					answerState.user.id = userChatId;
-					answerState.user.msgId = userMsgId;
-					// answer to callback query
-					await sendRequest(env.BOT_TOKEN, 'answerCallbackQuery', {
-						callback_query_id: callbackQueryId,
-					});
-					await sendMessage(env.BOT_TOKEN, update.callback_query.from.id, 'Type answer', {
-						reply_markup: {
-							force_reply: true,
-							input_field_placeholder: 'Type your answer...',
-							selective: true,
-						},
-					});
+				switch (true) {
+					case data.startsWith('admin_reply.'):
+						const userData = data.split('.')[1];
+						const [userChatId, userMsgId] = userData.split('-');
+						answerState.flag = true;
+						answerState.user.id = userChatId;
+						answerState.user.msgId = userMsgId;
+						// answer to callback query
+						await sendRequest(env.BOT_TOKEN, 'answerCallbackQuery', {
+							callback_query_id: callbackQueryId,
+							text: 'حالت پاسخ دهی فعال شد',
+						});
+						await sendMessage(env.BOT_TOKEN, update.callback_query.message.chat.id, 'Type answer', {
+							reply_markup: {
+								force_reply: true,
+								input_field_placeholder: 'Type your answer...',
+								selective: true,
+							},
+						});
+				}
+				return new Response('OK');
+				// User command: /start
+			}
+			if (update.message) {
+				const { message } = update;
+				if (message.text) {
+					if (message.text.toLowerCase() === '/start') {
+						const text = `سلام ${update.message.from.first_name}، به ربات پیامرسان خوش آمدید. \nبا استفاده از این ربات میتوانید مستقیما با ادمین ربات در ارتباط باشید.`;
+						await sendMessage(env.BOT_TOKEN, message.chat.id, text);
+						return new Response('OK');
+					}
+					// Admin command: answer message to user message
+					if (answerState.flag && message.chat.id.toString() === ADMIN_ID.toString()) {
+						await sendMessage(env.BOT_TOKEN, ADMIN_ID, JSON.stringify(message, null, 2));
+						await sendMessage(env.BOT_TOKEN, answerState.user.id, message.text, {
+							reply_parameters: {
+								message_id: answerState.user.msgId,
+							},
+						});
+						answerState = {
+							flag: false,
+							user: { id: null, msgId: null },
+						};
+
+						return new Response('OK');
+					}
+					// User command: send message to admin
+					if (message.from.id.toString() !== ADMIN_ID.toString()) {
+						await sendMessageToAdmin(env.BOT_TOKEN, update.message.chat.id, update.message.message_id);
+						return new Response('Hello World!');
+					}
 				}
 			}
-			return new Response('logic test');
 		} catch (err) {
 			console.error('Error:', err);
 			// send error to admin
