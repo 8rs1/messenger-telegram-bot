@@ -1,161 +1,60 @@
-const ADMIN_ID = 6073299107;
-const axios = require('axios');
-let answerState = {
-	flag: false,
-	user: { id: null, msgId: null },
-};
+import { ADMIN_ID } from './constants.js';
+import { isAnswerStateActive } from './utils/state.js';
+import { handleCallbackQuery } from './handlers/callback.js';
+import { handleStartCommand, handleUserMessageToAdmin, handleInvalidMessage } from './handlers/message.js';
+import { handleAdminReply } from './handlers/admin.js';
+import { sendMessage } from './api/telegram.js';
+
 export default {
 	async fetch(request, env, ctx) {
 		if (request.method !== 'POST') {
 			return new Response('Method not allowed', { status: 405 });
 		}
+
 		try {
 			const update = await request.json();
+			const token = env.BOT_TOKEN;
+
+			// Handle callback query
 			if (update.callback_query) {
-				const { data, id: callbackQueryId } = update.callback_query;
-				switch (true) {
-					case data.startsWith('admin_reply.'):
-						const userData = data.split('.')[1];
-						const [userChatId, userMsgId] = userData.split('-');
-						answerState.flag = true;
-						answerState.user.id = userChatId;
-						answerState.user.msgId = userMsgId;
-						// answer to callback query
-						await sendRequest(env.BOT_TOKEN, 'answerCallbackQuery', {
-							callback_query_id: callbackQueryId,
-							text: 'حالت پاسخ دهی فعال شد',
-						});
-						await sendMessage(env.BOT_TOKEN, update.callback_query.message.chat.id, 'Type answer', {
-							reply_markup: {
-								force_reply: true,
-								input_field_placeholder: 'Type your answer...',
-								selective: true,
-							},
-						});
-				}
+				await handleCallbackQuery(token, update);
 				return new Response('OK');
-				// User command: /start
 			}
+			// Handle messages
 			if (update.message) {
 				const { message } = update;
 				if (message.text) {
+					// /start command
 					if (message.text.toLowerCase() === '/start') {
-						const text = `سلام ${update.message.from.first_name}، به ربات پیامرسان خوش آمدید. \nبا استفاده از این ربات میتوانید مستقیما با ادمین ربات در ارتباط باشید.`;
-						await sendMessage(env.BOT_TOKEN, message.chat.id, text);
+						await handleStartCommand(token, message);
 						return new Response('OK');
 					}
-					// Admin command: answer message to user message
-					if (answerState.flag && message.chat.id.toString() === ADMIN_ID.toString()) {
-						if (message.text === '/cancel') {
-							answerState = {
-								flag: false,
-								user: { id: null, msgId: null },
-							};
-							await sendMessage(env.BOT_TOKEN, ADMIN_ID, 'Operation cancelled.', {
-								reply_parameters: {
-									message_id: message.message_id,
-								},
-							});
-							return new Response('Replying cancelled(answer state reset).');
-						}
-						await sendMessage(env.BOT_TOKEN, answerState.user.id, message.text, {
-							reply_parameters: {
-								message_id: answerState.user.msgId,
-							},
-						});
-						answerState = {
-							flag: false,
-							user: { id: null, msgId: null },
-						};
-						await sendMessage(env.BOT_TOKEN, ADMIN_ID, 'Your message sent to user', {
-							reply_parameters: {
-								message_id: message.message_id,
-							},
-						});
+					// Admin answer to user
+					if (isAnswerStateActive() && message.chat.id.toString() === ADMIN_ID.toString()) {
+						await handleAdminReply(token, message);
+						return new Response('OK');
+					}
 
-						return new Response('OK');
-					}
-					// User command: send message to admin
+					// Send user message to admin
 					if (message.from.id.toString() !== ADMIN_ID.toString()) {
-						await sendMessageToAdmin(env.BOT_TOKEN, message.chat.id, message.message_id);
-						await sendMessage(env.BOT_TOKEN, message.from.id, 'Message sent✅', {
-							reply_parameters: {
-								message_id: message.message_id,
-							},
-						});
+						await handleUserMessageToAdmin(token, message);
 						return new Response('OK');
 					}
-					await sendMessage(env.BOT_TOKEN, message.chat.id, 'Invalid message!\nPlease use commands.');
+					// Handle admin invalid message
+					await handleInvalidMessage(token, message);
 					return new Response('Logic response');
 				}
 			}
+			return new Response('OK');
 		} catch (err) {
 			console.error('Error:', err);
-			// send error to admin
-			await sendMessage(env.BOT_TOKEN, ADMIN_ID, `Error: ${err.message}`);
+			// Send error to admin
+			try {
+				await sendMessage(env.BOT_TOKEN, ADMIN_ID, `Error: ${err.message}`);
+			} catch (botErr) {
+				console.error('Failed to send error to admin:', botErr);
+			}
 			return new Response('Internal Server Error', { status: 500 });
 		}
 	},
 };
-async function sendRequest(token, method, data) {
-	const url = `https://api.telegram.org/bot${token}/${method}`;
-	try {
-		const response = await axios.post(url, data);
-		return response;
-	} catch (err) {
-		return err;
-	}
-}
-
-async function sendMessage(token, chatId, text, opts = {}) {
-	try {
-		const res = await sendRequest(token, 'sendMessage', {
-			chat_id: chatId,
-			text,
-			...opts,
-		});
-		return res;
-	} catch (err) {
-		throw err;
-	}
-}
-
-async function forwardMessage(token, from, to, msgId) {
-	try {
-		const res = await sendRequest(token, 'forwardMessage', {
-			from_chat_id: from,
-			chat_id: to,
-			message_id: msgId,
-		});
-		return res;
-	} catch (err) {
-		throw err;
-	}
-}
-
-async function sendMessageToAdmin(token, chatId, msgId) {
-	try {
-		const replyOpts = {
-			inline_keyboard: [[{ text: 'answer', callback_data: `admin_reply.${chatId}-${msgId}` }]],
-		};
-		const res = await forwardMessage(token, chatId, ADMIN_ID, msgId);
-		const sendRes = await sendMessage(token, ADMIN_ID, 'Choose one of bottom keys', {
-			reply_markup: replyOpts,
-		});
-		return res + sendRes;
-	} catch (err) {
-		throw err;
-	}
-}
-async function editMessage(token, chatId, msgId, text) {
-	try {
-		const res = await sendRequest(token, 'editMessageText', {
-			chat_id: chatId,
-			message_id: msgId,
-			text,
-		});
-		return res;
-	} catch (err) {
-		throw err;
-	}
-}
